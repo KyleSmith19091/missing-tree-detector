@@ -1,4 +1,4 @@
-# Kyle Smith - Aerobotics Assessment
+# Kyle Smith 
 
 ## Outline
 
