@@ -1,4 +1,4 @@
-# Kyle Smith 
+# Missing Tree Detector API 
 
 ## Outline
 
