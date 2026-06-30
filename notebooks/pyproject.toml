@@ -1,0 +1,14 @@
+[project]
+name = "notebooks"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.11.0",
+    "matplotlib-inline>=0.2.2",
+    "numpy>=2.4.6",
+    "scipy>=1.17.1",
+    "shapely>=2.1.2",
+    "utm>=0.8.1",
+]
