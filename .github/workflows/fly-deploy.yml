@@ -1,0 +1,78 @@
+name: CI / Fly Deploy
+
+# Run tests on PRs and pushes; deploy only on pushes to the default branch.
+# NOTE: this repo's current branch is `main` — `master` is included too.
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request: {}
+  workflow_dispatch: {}
+
+# Cancel an in-progress run for the same ref if a newer commit is pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter Python file changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            python:
+              - 'app/**/*.py'
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    # The app (pyproject.toml, tests/) lives in the app/ subdirectory.
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: uv run pytest
+
+  deploy:
+    name: Deploy to Fly.io
+    # Only deploy after tests pass, and only on pushes (not PRs).
+    needs: [test, changes]
+    # Only deploy on pushes AND when a Python file under app/ changed.
+    if: github.event_name == 'push' && needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
