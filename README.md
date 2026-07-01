@@ -1,5 +1,9 @@
 # Missing Tree Detector API 
 
+```bash
+curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
+```
+
 ## Outline
 
 ## 1. Requirements
@@ -51,12 +55,12 @@ point is perpendicular to the y-axis we can more easily reason about them. Since
 
 ![Same-Y-Rotated](/diagrams/sameyrotated.png)
 
-To achieve this we need to reach for some linear algebra. We first need to determine the orientation of the rows (look at code to understand how this is done). We can then find the direction that is perpendicular to that direction and then project the points onto it. This is done by taking the dot product of the tree coordinates and multiplying with the vector $\langle -sin(\theta), cos(\theta) \rangle$ where $\theta$ is the dominant orientation of the rows. The dot product tells us how far along the one vector lies on the other. We want to know how far along a tree's position lies along the perpendicular vector. Trees that 
-have are next to each other in a row should have the same dot product value, since they should project to the same point on the perpendicular vector.
+To achieve this we need to reach for some linear algebra. We first need to determine the orientation of the rows (look at code to understand how this is done). We can then find the direction that is perpendicular to that direction and then project the points onto it. This is done by taking the dot product of the tree coordinates and multiplying with the vector $\langle -sin(\theta), cos(\theta) \rangle$ where $\theta$ is the dominant orientation of the rows. 
+
+The dot product tells us how far along the one vector lies on the other. We want to know how far along a tree's position lies along the perpendicular vector. Trees that have are next to each other in a row should have the same dot product value, since they should project to the same point on the perpendicular vector.
 
 We can then group the points that have similar projection(dot product result) values as rows. There are some extra steps needed to achieve this, that are outlined in notebooks/notebook.ipynb.
 
-With the rows we can determine determine the mean distance between trees in that row.
 With the mean we are able to identify gaps within the row, by walking across the row and calculating the difference between the trees in a pairwise fashion. We detect the number trees that are missing by dividing the distance by the average tree spacing distance. To determine the positions of the missing trees we need a method to estimate this. Linear interpolation makes sense here, since it is a simple method that can be used to evenly space elements in a line. The trees are assumed to be evenly spaced and in a line.
 
 ### 3.2 Phase 2
@@ -87,13 +91,67 @@ The last row would be misclassified as three different rows.
 
 3. The second phase won't work if three rows are missing trees in the same positions, since it can't establish a pattern then.
 
-## 4. Architecture
+## 4. Architecture 
+
+### 4.1 Diagram
+
+![Architecture](/diagrams/architecture.png)
+
+The architecture is pretty simple, the key component is the orchards service. This receives the request from the client and orchestrates the steps to gather the latest tree survey for a given orchard. The tree survey is retrieved from the Aerobotics API and the returned tree positions (longitude and latitude coordinates) are then passed to the missing tree detector. The retrieved survey entity is used to query the cache to determine if we have already detected missing trees for it. This will then apply the missing tree detection algorithm to determine if there are any missing trees using the given positions.
+
+### 4.2 System Design Considerations
+
+The missing tree detection algorithm does have a noticeable latency, so to mitigate this we add an in-process cache to mitigate this issue. The amount of memory required to store the list of missing trees for an orchard is generally pretty small so this should be fine for now. In a production setting this cache might rather be something like a Redis instance, this would allow us to have multiple instances of the API that can share this caching layer.
+
+The latency for detecting missing trees is acceptable for moderate orchards, if we need to handle larger orchards we need to add a job system. This way the client would instead receive a Job ID when asking if trees are missing in an orchard. The original client request would then be processed in an asynchronous fashion. This is so that the client is not waiting for the response and can continue with other work while waiting for its request to be processed.
 
 ## 5. Project Structure
 
-## 6. Running tests
+```text
+/
+├── app/
+│   ├── api/
+│   │   ├── clients
+│   │   │   ├── aerobotics.py - API Client Interface
+│   │   │   └── aerobotics_impl.py
+│   │   ├── core
+│   │   │   └── config.py - App configuration
+│   │   └── orchards
+│   │       ├── cache.py - Missing trees cache
+│   │       ├── model.py - Types
+│   │       ├── router.py - Endpoints
+│   │       ├── service.py - Logic
+│   │       └── missing_tree_detector/
+│   │           └── missing_tree_detector_impl.py
+│   ├── tests/ Unit-tests
+│   └── Dockerfile
+├── notebooks/
+│   └── notebook.ipynb - Initial Algorithm Draft
+├── README.md - Project Description
+└── diagrams/ - Extra Diagrams
+```
 
-## 7. Journal
+## 6. Running Locally 
+
+```bash
+cd app/
+uv run uvicorn api.main:app --reload
+```
+
+## 7. CI/CD
+
+The API is as Fly.io machine on [fly.io](https://fly.io/). A fly.io machine is an AWS firecracker microVM. Fly.IO was chosen since it has a secret manager, supports scaling down instances that are not used, easy scaling if needed, SSL certificate management and can deploy using a single command.
+
+A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API.
+
+## 8. Where I used AI
+
+1. I used AI to help me get an approach to group the different projections into rows in a resilient way.
+2. I used a coding agent to generate the FastAPI boilerplate code
+3. I used AI to assist with what functions to use in NumPy
+4. I used AI to generate the visualisations in the notebooks/notebook.ipynb
+
+## 9. Journal
 
 **Session 1**
 - Spent time trying to understand the problem.
@@ -112,3 +170,8 @@ The last row would be misclassified as three different rows.
 - Wrote out algorithm outline and motivation.
 
 **Session 3**
+- Rewrote algorithm from notebook for API implementation.
+- Added code for setting up HTTP server and added missing trees route.
+- Added unit tests for the tree detection algorithm
+- Added Dockerfile and additional configuration to deploy API 
+- Added Github Workflow to deploy app when pushing to main
