@@ -6,7 +6,7 @@ from scipy.spatial import KDTree
 import numpy as np
 import utm
 
-from api.trees.missing_tree_detector.detector import (
+from api.orchards.missing_tree_detector.detector import (
     Detector,
     TreePosition
 )
@@ -16,7 +16,7 @@ class DetectorImpl(Detector):
         super().__init__()
         self.row_spacing_threshold_multiplier = row_spacing_threshold_multiplier
 
-    def detect_missing_trees(self, tree_positions: List[TreePosition], utm_zone_number, utm_zone_letter):
+    def detect_missing_trees(self, tree_positions: List[TreePosition], utm_zone_number: int, utm_zone_letter: str) -> List[dict]:
         """
         detect_missing_trees implements a novel algorithm for trying
         to estimate possible missing trees from a list of tree positions 
@@ -46,12 +46,40 @@ class DetectorImpl(Detector):
         )
 
         # check for missing trees along a row
+        missing_trees_along_row = self._detect_missing_trees_along_rows(
+            rows,
+            angle_along,
+            utm_zone_number,
+            utm_zone_letter,
+        )
+
+        # check for trees missing at the edges of rows
+        missing_trees_across_edges = self._detect_missing_trees_across_edges(
+            rows,
+            missing_trees_along_row,
+            angle_along,
+            utm_zone_number,
+            utm_zone_letter,
+        )
+
+        missing_trees = []
+        for _, missing_trees_in_row in missing_trees_along_row.items():
+            missing_trees.extend(missing_trees_in_row)
+
+        for missing_tree in missing_trees_across_edges:
+            missing_trees.append(missing_tree)
+
+        return missing_trees
+
+    def _detect_missing_trees_along_rows(self, rows: dict, angle_along: np.ndarray, utm_zone_number: int, utm_zone_letter: str) -> dict:
+        # for each row, estimate the in-row spacing and interpolate trees into
+        # any interior gap that is wide enough to hold one or more trees
         missing_trees_along_row = defaultdict(list)
         for label, positions_in_row in rows.items():
             # need at least three trees to establish a pattern
             if len(positions_in_row) < 3:
                 continue
-            
+
             projections_and_positions = []
             for position in positions_in_row:
                 projection = np.dot(position, angle_along)
@@ -59,14 +87,18 @@ class DetectorImpl(Detector):
             # sort projection values in ascending order (left to right)
             projections_and_positions.sort(key=lambda x: x[0])
 
-            # determine mean distances between trees
+            # Use the median (not mean) spacing as the "one tree" reference.
+            # The mean is inflated by the very gaps we're trying to count, which
+            # makes round(gap / spacing) under-count adjacent/clustered gaps.
+            # The median ignores a minority of large gaps, so it stays at the
+            # true single-tree spacing.
             spacings = np.diff([p for p, _ in projections_and_positions])
-            mean_spacing = np.mean(spacings)
-            if mean_spacing <= 0:
+            typical_spacing = np.median(spacings)
+            if typical_spacing <= 0:
                 continue
 
             for i, distance in enumerate(spacings):
-                number_missing = round(distance / mean_spacing) - 1
+                number_missing = round(distance / typical_spacing) - 1
                 if number_missing <= 0:
                     continue
 
@@ -80,7 +112,12 @@ class DetectorImpl(Detector):
                     lat, lng = utm.to_latlon(missing_easting, missing_northing, utm_zone_number, utm_zone_letter)
                     missing_trees_along_row[label].append({"lat": lat, "lng": lng})
 
-        # check for trees missing at the edges of rows
+        return missing_trees_along_row
+
+    def _detect_missing_trees_across_edges(self, rows: dict, missing_trees_along_row: dict, angle_along: np.ndarray, utm_zone_number: int, utm_zone_letter: str) -> list:
+        # scan rows in triplets; when the top and bottom neighbours agree on
+        # tree count but the middle row is short, the deficit is attributed to
+        # trees missing off the ends of the middle row
         missing_trees_across_edges = []
         sorted_row_labels = sorted(rows)
         for i in range(1, len(sorted_row_labels)-1):
@@ -136,14 +173,7 @@ class DetectorImpl(Detector):
                     lat, lng = utm.to_latlon(utm_e, utm_n, utm_zone_number, utm_zone_letter)
                     missing_trees_across_edges.append({"lat": lat, "lng": lng})
 
-        missing_trees = []
-        for _, missing_trees_in_row in missing_trees_along_row.items():
-            missing_trees.extend(missing_trees_in_row)
-
-        for missing_tree in missing_trees_across_edges:
-            missing_trees.append(missing_tree)
-
-        return missing_trees
+        return missing_trees_across_edges
 
     def _determine_dominant_row_orientations(self, tree_positions: np.ndarray) -> Tuple[float, float]:
         # KDTree will organise points according to their relative distances
@@ -237,7 +267,7 @@ class DetectorImpl(Detector):
 
         return rows
 
-def lerp(a, b, t):
+def lerp(a: float | None, b: float | None, t: float) -> float | None:
     if a is None or b is None:
         return None
     return float(a) + (float(b) - float(a)) * t
