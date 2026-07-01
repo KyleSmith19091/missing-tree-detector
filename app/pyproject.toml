@@ -21,3 +21,10 @@ dependencies = [
 prod = [
     "gunicorn>=26.0.0",
 ]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
