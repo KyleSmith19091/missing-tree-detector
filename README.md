@@ -6,6 +6,26 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 
 ## Outline
 
+- [1. Requirements](#1-requirements)
+  - [Functional Requirements (F)](#functional-requirements-f)
+  - [Non-functional Requirements (N)](#non-functional-requirements-n)
+- [2. API Design](#2-api-design)
+  - [Endpoints](#endpoints)
+- [3. Missing Tree Calculation Algorithm](#3-missing-tree-calculation-algorithm)
+  - [3.1 Phase 1](#31-phase-1)
+  - [3.2 Phase 2](#32-phase-2)
+  - [Algorithmic Complexity notes](#algorithmic-complexity-notes)
+  - [Assumptions and Shortcomings](#assumptions-and-shortcomings)
+- [4. Architecture](#4-architecture)
+  - [4.1 Diagram](#41-diagram)
+  - [4.2 System Design Considerations](#42-system-design-considerations)
+- [5. Project Structure](#5-project-structure)
+- [6. Running Locally](#6-running-locally)
+- [7. CI/CD](#7-cicd)
+  - [7.1 Tests](#71-tests)
+- [8. Where I used AI](#8-where-i-used-ai)
+- [9. Journal](#9-journal)
+
 ## 1. Requirements
 
 ### Functional Requirements (F)
@@ -24,7 +44,7 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 ### Endpoints
 | Endpoint        | HTTP Method | Request  | Query Parameters | Response |
 | ------------- |:-------------:| -----:| -----: | -----: | 
-| /missing_tress      | GET | `orchard_id: string` | `limit: integer, offset integer` | `[]{long: float64, lat: float64}`
+| /missing_tress      | GET | `orchard_id: string` | `limit: integer, offset integer` | `[]{lng: float64, lat: float64}`
 
 ## 3. Missing Tree Calculation Algorithm
 To determine if a tree is missing we need to estimate the planting pattern.
@@ -135,6 +155,7 @@ The latency for detecting missing trees is acceptable for moderate orchards, if 
 
 ```bash
 cd app/
+uv sync
 uv run uvicorn api.main:app --reload
 ```
 
@@ -143,6 +164,10 @@ uv run uvicorn api.main:app --reload
 The API is as Fly.io machine on [fly.io](https://fly.io/). A fly.io machine is an AWS firecracker microVM. Fly.IO was chosen since it has a secret manager, supports scaling down instances that are not used, easy scaling if needed, SSL certificate management and can deploy using a single command.
 
 A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API.
+
+### 7.1 Tests
+
+Unit-tests can be run
 
 ## 8. Where I used AI
 
