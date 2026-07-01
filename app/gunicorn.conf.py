@@ -9,7 +9,6 @@ import os
 # serve an ASGI app.
 worker_class = "uvicorn.workers.UvicornWorker"
 
-# Honour PORT if the platform injects one (Fly, Heroku, etc), else 8000.
 bind = f"0.0.0.0:{os.getenv('PORT') or '8000'}"
 
 # WEB_CONCURRENCY lets the deploy environment cap worker count. cpu_count()

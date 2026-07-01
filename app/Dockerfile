@@ -33,6 +33,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER app
 EXPOSE 8000
 
-# gunicorn.conf.py sets the uvicorn worker class, bind (0.0.0.0:8000) and
-# worker count. AEROBOTICS_API_TOKEN must be provided at runtime.
 CMD ["gunicorn", "api.main:app", "-c", "gunicorn.conf.py"]
