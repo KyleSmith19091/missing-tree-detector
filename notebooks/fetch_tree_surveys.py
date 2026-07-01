@@ -7,15 +7,16 @@ import json
 import sys
 import urllib.request
 import urllib.error
+import os
 
 import utm
 
 BASE_URL = "https://api.aerobotics.com/farming"
-ORCHARD_ID = 216269  # <-- replace with your orchard ID
+ORCHARD_ID = 216269  
 
 
 def get_headers():
-    token = "4c80d904cae3d86b472fd636ef9d78a36faea104c61c7018a3604285d552d5e4"
+    token = os.getenv("AEROBOTICS_API_TOKEN")
     if not token:
         print("Error: Set AEROBOTICS_API_TOKEN environment variable", file=sys.stderr)
         sys.exit(1)
