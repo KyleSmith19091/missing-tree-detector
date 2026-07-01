@@ -146,10 +146,13 @@ A github workflow was also setup so that pushes to the main branch automatically
 
 ## 8. Where I used AI
 
+I declare that I used an AI coding to aid in certain aspects of this project. 
+
 1. I used AI to help me get an approach to group the different projections into rows in a resilient way.
-2. I used a coding agent to generate the FastAPI boilerplate code
-3. I used AI to assist with what functions to use in NumPy
-4. I used AI to generate the visualisations in the notebooks/notebook.ipynb
+2. I used a coding agent to generate the FastAPI boilerplate code.
+3. I used AI to assist with what functions to use in NumPy.
+4. I used AI to generate the visualisations in the notebooks/notebook.ipynb.
+5. I used AI to generate the fly.toml file.
 
 ## 9. Journal
 
