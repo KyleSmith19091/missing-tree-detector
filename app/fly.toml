@@ -1,26 +1,11 @@
-# Fly.io deployment config.
-#
-# One-time setup:
-#   fly launch --no-deploy            # or: fly apps create aerobotics-api
-#   fly secrets set AEROBOTICS_API_TOKEN=your_token_here
-#   fly deploy
-#
-# The API token is a secret and must NOT live in this file — set it with
-# `fly secrets set` (encrypted, injected as an env var at runtime).
-
 app = "aerobotics-api"
-primary_region = "jnb"  # Johannesburg — closest region for SA orchards
+primary_region = "jnb"  
 
 [build]
-  # Build context is the repo root (where this file lives); the Dockerfile
-  # lives under ci/.
-  dockerfile = "ci/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
-  # Non-secret configuration. Keep worker count modest: the app loads
-  # numpy/scipy per worker, so 2 fits comfortably on a 1x machine.
   WEB_CONCURRENCY = "2"
-  # AEROBOTICS_BASE_URL defaults in config.py; override here if needed.
 
 [http_service]
   internal_port = 8000
