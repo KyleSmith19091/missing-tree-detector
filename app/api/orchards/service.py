@@ -32,8 +32,6 @@ class Service:
             raise SurveyNotFoundError(orchard_id)
 
         # return cached results for this survey if we've already computed them.
-        # a newer survey has a different key, so this naturally misses and the
-        # stale entry for the orchard is replaced when we store below.
         cached = self._cache.get(survey.id, orchard_id)
         if cached is not None:
             logger.info("cache hit for orchard {} survey {}", orchard_id, survey.id)
