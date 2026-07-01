@@ -36,6 +36,7 @@ class Service:
         if cached is not None:
             logger.info("cache hit for orchard {} survey {}", orchard_id, survey.id)
             return MissingTreesResponse(missing_trees=cached)
+        logger.debug("cache miss for orchard {} survey {}", orchard_id, survey.id)
 
         positions = [
             TreePosition(lat=tree.lat, lng=tree.lng)
@@ -68,6 +69,7 @@ class Service:
         missing_trees = [
             MissingTree(lat=m["lat"], lng=m["lng"]) for m in raw_missing
         ]
+        logger.info("{} missing trees detected for orchard {} survey {}", len(missing_trees), orchard_id, survey.id)
 
         self._cache.set(survey.id, orchard_id, missing_trees)
         return MissingTreesResponse(missing_trees=missing_trees)
