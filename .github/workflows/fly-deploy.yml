@@ -33,6 +33,31 @@ jobs:
             python:
               - 'app/**/*.py'
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    # The app (pyproject.toml, tests/) lives in the app/ subdirectory.
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -58,7 +83,7 @@ jobs:
   deploy:
     name: Deploy to Fly.io
     # Only deploy after tests pass, and only on pushes (not PRs).
-    needs: [test, changes]
+    needs: [lint, test, changes]
     # Only deploy on pushes AND when a Python file under app/ changed.
     if: github.event_name == 'push' && needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest

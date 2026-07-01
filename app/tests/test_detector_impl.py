@@ -7,9 +7,8 @@ gaps at (approximately) the right coordinates.
 """
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
-import numpy as np
 import pytest
 import utm
 
@@ -20,8 +19,7 @@ from api.orchards.missing_tree_detector.detector_impl import DetectorImpl, lerp
 BASE_LAT, BASE_LNG = -32.1, 18.9
 _BASE_E, _BASE_N, ZONE_NUMBER, ZONE_LETTER = utm.from_latlon(BASE_LAT, BASE_LNG)
 
-# Grid geometry (metres).
-ALONG_SPACING = 5.0   # spacing between trees within a row (easting)
+ALONG_SPACING = 5.0  # spacing between trees within a row (easting)
 ACROSS_SPACING = 8.0  # spacing between rows (northing)
 
 THRESHOLD_MULTIPLIER = 0.4
@@ -76,36 +74,33 @@ def _to_utm(missing: dict) -> tuple[float, float]:
 def _nearest_dist(missing: list[dict], target_utm: tuple[float, float]) -> float:
     """Smallest distance (m) from any detected tree to ``target_utm``."""
     tx, ty = target_utm
-    return min(
-        math.hypot(e - tx, n - ty)
-        for e, n in (_to_utm(m) for m in missing)
-    )
+    return min(math.hypot(e - tx, n - ty) for e, n in (_to_utm(m) for m in missing))
 
 
 @pytest.fixture
 def detector() -> DetectorImpl:
     return DetectorImpl(THRESHOLD_MULTIPLIER)
 
+
 def test_returns_list_of_latlng_dicts(detector: DetectorImpl):
-    missing = detector.detect_missing_trees(
-        _grid(6, 6, drop=[(2, 3)]), ZONE_NUMBER, ZONE_LETTER
-    )
+    missing = detector.detect_missing_trees(_grid(6, 6, drop=[(2, 3)]), ZONE_NUMBER, ZONE_LETTER)
     assert isinstance(missing, list)
     for m in missing:
         assert set(m) == {"lat", "lng"}
         assert isinstance(m["lat"], float)
         assert isinstance(m["lng"], float)
 
+
 def test_perfect_grid_has_no_missing(detector: DetectorImpl):
     missing = detector.detect_missing_trees(_grid(7, 7), ZONE_NUMBER, ZONE_LETTER)
     assert missing == []
 
+
 def test_single_interior_gap_detected(detector: DetectorImpl):
-    missing = detector.detect_missing_trees(
-        _grid(7, 7, drop=[(3, 3)]), ZONE_NUMBER, ZONE_LETTER
-    )
+    missing = detector.detect_missing_trees(_grid(7, 7, drop=[(3, 3)]), ZONE_NUMBER, ZONE_LETTER)
     assert len(missing) == 1
     assert _nearest_dist(missing, _cell_utm(3, 3)) < 0.5
+
 
 def test_consecutive_interior_gap_detects_two_trees(detector: DetectorImpl):
     # Remove two adjacent interior trees (a ~3x-spacing gap) in a short row.
@@ -118,6 +113,7 @@ def test_consecutive_interior_gap_detects_two_trees(detector: DetectorImpl):
     assert _nearest_dist(missing, _cell_utm(3, 3)) < 0.5
     assert _nearest_dist(missing, _cell_utm(3, 4)) < 0.5
 
+
 def test_multiple_rows_with_interior_gaps(detector: DetectorImpl):
     missing = detector.detect_missing_trees(
         _grid(8, 8, drop=[(2, 4), (5, 2)]), ZONE_NUMBER, ZONE_LETTER
@@ -125,6 +121,7 @@ def test_multiple_rows_with_interior_gaps(detector: DetectorImpl):
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(2, 4)) < 0.5
     assert _nearest_dist(missing, _cell_utm(5, 2)) < 0.5
+
 
 def test_two_separate_gaps_in_short_row(detector: DetectorImpl):
     # Two single gaps in one short row: the inflated mean would report 0,
@@ -136,6 +133,7 @@ def test_two_separate_gaps_in_short_row(detector: DetectorImpl):
     assert _nearest_dist(missing, _cell_utm(3, 2)) < 0.5
     assert _nearest_dist(missing, _cell_utm(3, 5)) < 0.5
 
+
 def test_end_of_row_gap_detected(detector: DetectorImpl):
     # Middle row (r=3) is missing its last two trees; neighbouring rows are
     # full and equal length, so the deficit is attributed to the row's end.
@@ -145,6 +143,7 @@ def test_end_of_row_gap_detected(detector: DetectorImpl):
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(3, 6)) < 0.5
     assert _nearest_dist(missing, _cell_utm(3, 7)) < 0.5
+
 
 @pytest.mark.parametrize("rotation_deg", [15.0, 30.0, 47.0])
 def test_interior_gap_detected_on_rotated_orchard(detector: DetectorImpl, rotation_deg: float):
@@ -156,11 +155,13 @@ def test_interior_gap_detected_on_rotated_orchard(detector: DetectorImpl, rotati
     assert len(missing) == 1
     assert _nearest_dist(missing, _cell_utm(3, 3, rotation_deg)) < 0.5
 
+
 def test_rows_with_fewer_than_three_trees_are_ignored(detector: DetectorImpl):
     # A 2-column grid: every row has only 2 trees, below the minimum needed
     # to establish an in-row pattern, so nothing is reported (and no crash).
     missing = detector.detect_missing_trees(_grid(6, 2), ZONE_NUMBER, ZONE_LETTER)
     assert missing == []
+
 
 @pytest.mark.parametrize(
     "a,b,t,expected",
@@ -173,6 +174,7 @@ def test_rows_with_fewer_than_three_trees_are_ignored(detector: DetectorImpl):
 )
 def test_lerp_interpolates(a, b, t, expected):
     assert lerp(a, b, t) == pytest.approx(expected)
+
 
 @pytest.mark.parametrize("a,b", [(None, 1.0), (1.0, None), (None, None)])
 def test_lerp_returns_none_when_endpoint_missing(a, b):

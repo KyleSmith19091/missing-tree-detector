@@ -1,48 +1,47 @@
-from collections import defaultdict
-from typing import List, Tuple
 import math
+from collections import defaultdict
 
-from scipy.spatial import KDTree
 import numpy as np
 import utm
+from scipy.spatial import KDTree
 
-from api.orchards.missing_tree_detector.detector import (
-    Detector,
-    TreePosition
-)
+from api.orchards.missing_tree_detector.detector import Detector, TreePosition
+
 
 class DetectorImpl(Detector):
     def __init__(self, row_spacing_threshold_multiplier: float):
         super().__init__()
         self.row_spacing_threshold_multiplier = row_spacing_threshold_multiplier
 
-    def detect_missing_trees(self, tree_positions: List[TreePosition], utm_zone_number: int, utm_zone_letter: str) -> List[dict]:
+    def detect_missing_trees(
+        self, tree_positions: list[TreePosition], utm_zone_number: int, utm_zone_letter: str
+    ) -> list[dict]:
         """
         detect_missing_trees implements a novel algorithm for trying
-        to estimate possible missing trees from a list of tree positions 
+        to estimate possible missing trees from a list of tree positions
         within an orchard
 
         """
-        
+
         # convert tree positions to UTM coordinates
         tree_positions_utm = np.array(
             [[point.as_utm()[0], point.as_utm()[1]] for point in tree_positions]
         )
 
         # determine dominant row orientation (assumes single dominant orientation)
-        angle_perpendicular, angle_along = self._determine_dominant_row_orientations(tree_positions_utm)
+        angle_perpendicular, angle_along = self._determine_dominant_row_orientations(
+            tree_positions_utm
+        )
 
         # project tree positions to vector perpendicular to dominant orientation direction vector
-        projections_perpendicular = tree_positions_utm @ angle_perpendicular 
+        projections_perpendicular = tree_positions_utm @ angle_perpendicular
 
         # estimate the row spacing between the rows of trees
         row_spacing = self._estimate_row_spacing(tree_positions_utm, projections_perpendicular)
 
         # construct rows using row spacing
         rows = self._cluster_rows_by_spacing(
-            tree_positions_utm, 
-            row_spacing, 
-            projections_perpendicular
+            tree_positions_utm, row_spacing, projections_perpendicular
         )
 
         # check for missing trees along a row
@@ -71,7 +70,9 @@ class DetectorImpl(Detector):
 
         return missing_trees
 
-    def _detect_missing_trees_along_rows(self, rows: dict, angle_along: np.ndarray, utm_zone_number: int, utm_zone_letter: str) -> dict:
+    def _detect_missing_trees_along_rows(
+        self, rows: dict, angle_along: np.ndarray, utm_zone_number: int, utm_zone_letter: str
+    ) -> dict:
         # for each row, estimate the in-row spacing and interpolate trees into
         # any interior gap that is wide enough to hold one or more trees
         missing_trees_along_row = defaultdict(list)
@@ -105,23 +106,32 @@ class DetectorImpl(Detector):
                 tree_before_position = projections_and_positions[i][1]
                 tree_after_position = projections_and_positions[i + 1][1]
 
-                for j in range(1, number_missing+1):
+                for j in range(1, number_missing + 1):
                     step = j / (number_missing + 1)
-                    missing_easting = lerp(tree_before_position[0], tree_after_position[0], step) 
+                    missing_easting = lerp(tree_before_position[0], tree_after_position[0], step)
                     missing_northing = lerp(tree_before_position[1], tree_after_position[1], step)
-                    lat, lng = utm.to_latlon(missing_easting, missing_northing, utm_zone_number, utm_zone_letter)
+                    lat, lng = utm.to_latlon(
+                        missing_easting, missing_northing, utm_zone_number, utm_zone_letter
+                    )
                     missing_trees_along_row[label].append({"lat": lat, "lng": lng})
 
         return missing_trees_along_row
 
-    def _detect_missing_trees_across_edges(self, rows: dict, missing_trees_along_row: dict, angle_along: np.ndarray, utm_zone_number: int, utm_zone_letter: str) -> list:
+    def _detect_missing_trees_across_edges(
+        self,
+        rows: dict,
+        missing_trees_along_row: dict,
+        angle_along: np.ndarray,
+        utm_zone_number: int,
+        utm_zone_letter: str,
+    ) -> list:
         # scan rows in triplets; when the top and bottom neighbours agree on
         # tree count but the middle row is short, the deficit is attributed to
         # trees missing off the ends of the middle row
         missing_trees_across_edges = []
         sorted_row_labels = sorted(rows)
-        for i in range(1, len(sorted_row_labels)-1):
-            top_label = sorted_row_labels[i-1]
+        for i in range(1, len(sorted_row_labels) - 1):
+            top_label = sorted_row_labels[i - 1]
             top_positions = rows[top_label]
             top_num_trees = len(top_positions) + len(missing_trees_along_row[top_label])
             top_projections_along_row = np.dot(top_positions, angle_along)
@@ -136,7 +146,7 @@ class DetectorImpl(Detector):
             middle_last_tree_position_projection = np.max(middle_projections_along_row)
             middle_mean_spacing = np.mean(np.diff(np.sort(middle_projections_along_row)))
 
-            bottom_label = sorted_row_labels[i+1]
+            bottom_label = sorted_row_labels[i + 1]
             bottom_positions = rows[bottom_label]
             bottom_num_trees = len(bottom_positions) + len(missing_trees_along_row[bottom_label])
             bottom_projections_along_row = np.dot(bottom_positions, angle_along)
@@ -148,13 +158,18 @@ class DetectorImpl(Detector):
                 continue
 
             deficit = top_num_trees - middle_num_trees
-            if deficit <= 0: # middle has more trees than top and bottom so can not reliable establish pattern here
+            if deficit <= 0:  # middle has more trees than top/bottom, so no reliable pattern here
                 continue
 
-            start_gap = middle_first_tree_position_projection - min(top_first_tree_position_projection, bottom_first_tree_position_projection) 
+            start_gap = middle_first_tree_position_projection - min(
+                top_first_tree_position_projection, bottom_first_tree_position_projection
+            )
             missing_at_start = max(0, round(start_gap / middle_mean_spacing))
 
-            end_gap = max(top_last_tree_position_projection, bottom_last_tree_position_projection) - middle_last_tree_position_projection
+            end_gap = (
+                max(top_last_tree_position_projection, bottom_last_tree_position_projection)
+                - middle_last_tree_position_projection
+            )
             missing_at_end = max(0, round(end_gap / middle_mean_spacing))
 
             if missing_at_start > 0:
@@ -175,7 +190,9 @@ class DetectorImpl(Detector):
 
         return missing_trees_across_edges
 
-    def _determine_dominant_row_orientations(self, tree_positions: np.ndarray) -> Tuple[float, float]:
+    def _determine_dominant_row_orientations(
+        self, tree_positions: np.ndarray
+    ) -> tuple[float, float]:
         # KDTree will organise points according to their relative distances
         kdtree = KDTree(tree_positions)
 
@@ -184,15 +201,15 @@ class DetectorImpl(Detector):
         # since the idea is that the trees are in a pretty uniform grid
         # so the closest trees should be above, below, left and right
         K = 4
-        _, indices = kdtree.query(tree_positions, k=K+1) 
+        _, indices = kdtree.query(tree_positions, k=K + 1)
 
         # calculate the relative angle between each tree and the selected neighbour trees
         angles = []
         for i, neighbours in enumerate(indices):
-            for j in neighbours[1:]: # skip self
+            for j in neighbours[1:]:  # skip self
                 dx = tree_positions[j, 0] - tree_positions[i, 0]
                 dy = tree_positions[j, 1] - tree_positions[i, 1]
-                angle = math.atan2(dy, dx) % math.pi # pi == 180 degrees, radials used by default
+                angle = math.atan2(dy, dx) % math.pi  # pi == 180 degrees, radials used by default
                 angles.append(angle)
 
         # group angles, values are in radial form, but would still result in 180 possible values
@@ -207,12 +224,14 @@ class DetectorImpl(Detector):
         # determine the direction perpendicular to row orientation
         up = np.array([-math.sin(row_angle), math.cos(row_angle)])
 
-        return (up, along) 
+        return (up, along)
 
-    def _estimate_row_spacing(self, tree_positions: np.ndarray, projections_perpendicular: np.ndarray) -> float:
+    def _estimate_row_spacing(
+        self, tree_positions: np.ndarray, projections_perpendicular: np.ndarray
+    ) -> float:
         # group perpendicular projections
         hist, bins = np.histogram(
-            projections_perpendicular, 
+            projections_perpendicular,
             bins=max(100, len(tree_positions) // 2),
         )
 
@@ -221,9 +240,9 @@ class DetectorImpl(Detector):
         hist_centered = hist - hist.mean()
 
         autocorr = np.correlate(hist_centered, hist_centered, mode="full")
-        autocorr = autocorr[len(autocorr) // 2:]  # positive lags only
+        autocorr = autocorr[len(autocorr) // 2 :]  # positive lags only
 
-        # find peaks, a peak is the point that is greater than a previous value, but less than the next
+        # find peaks: a point greater than the previous value but less than the next
         bin_width = bins[1] - bins[0]
         min_lag = max(1, int(1.0 / bin_width))
         peaks = []
@@ -239,10 +258,12 @@ class DetectorImpl(Detector):
 
         return row_spacing
 
-    def _cluster_rows_by_spacing(self, tree_positions: np.ndarray, row_spacing: float, projections_perpendicular: np.ndarray) -> dict:
+    def _cluster_rows_by_spacing(
+        self, tree_positions: np.ndarray, row_spacing: float, projections_perpendicular: np.ndarray
+    ) -> dict:
         threshold = row_spacing * self.row_spacing_threshold_multiplier
 
-        # sort the projections by magnitude (using index so we don't change order of projections array)
+        # sort projections by magnitude (via index so we don't reorder the array)
         sorted_index = np.argsort(projections_perpendicular)
         sorted_projections = projections_perpendicular[sorted_index]
 
@@ -252,9 +273,9 @@ class DetectorImpl(Detector):
         curr_row_label = 0
         sorted_row_labels[0] = curr_row_label
         for i in range(1, len(sorted_projections)):
-            # since we've sorted the projection, the first value for which this 
+            # since we've sorted the projection, the first value for which this
             # is true will be the first projection of the next row
-            if (sorted_projections[i] - sorted_projections[i-1]) > threshold:
+            if (sorted_projections[i] - sorted_projections[i - 1]) > threshold:
                 curr_row_label += 1
             sorted_row_labels[i] = curr_row_label
 
@@ -262,10 +283,11 @@ class DetectorImpl(Detector):
         rows = defaultdict(list)
         row_labels = np.zeros_like(sorted_projections, dtype=int)
         row_labels[sorted_index] = sorted_row_labels
-        for position, label in zip(tree_positions, row_labels):
+        for position, label in zip(tree_positions, row_labels, strict=False):
             rows[label].append(position)
 
         return rows
+
 
 def lerp(a: float | None, b: float | None, t: float) -> float | None:
     if a is None or b is None:

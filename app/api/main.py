@@ -14,9 +14,11 @@ app = FastAPI(title="api", version="0.1.0")
 # register orchards router
 app.include_router(trees_router)
 
+
 def _error(status_code: int, message: str) -> JSONResponse:
     """Uniform error envelope: always ``{"error": "<message>"}``."""
     return JSONResponse(status_code=status_code, content={"error": message})
+
 
 @app.exception_handler(SurveyNotFoundError)
 async def handle_survey_not_found(request: Request, exc: SurveyNotFoundError):

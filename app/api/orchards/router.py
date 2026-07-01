@@ -10,6 +10,7 @@ from api.orchards.service import Service
 
 router = APIRouter(prefix="/orchards", tags=["trees"])
 
+
 @lru_cache
 def build_service() -> Service:
     """Build the TreeService

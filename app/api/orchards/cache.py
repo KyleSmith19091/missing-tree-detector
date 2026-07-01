@@ -25,9 +25,7 @@ class MissingTreesCache:
         """Return cached missing trees for this survey, or None on a miss."""
         return self._cache.get(self._key(survey_id, orchard_id))
 
-    def set(
-        self, survey_id: int, orchard_id: int, missing_trees: list[MissingTree]
-    ) -> None:
+    def set(self, survey_id: int, orchard_id: int, missing_trees: list[MissingTree]) -> None:
         """Store results for a survey, evicting any older entry for the orchard."""
         key = self._key(survey_id, orchard_id)
         with self._lock:

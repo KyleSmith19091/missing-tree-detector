@@ -9,6 +9,7 @@ from api.orchards.model import MissingTree, MissingTreesResponse
 # minimum number of trees required to establish pattern in detection algorithm
 _MIN_TREES_FOR_DETECTION = 3
 
+
 class SurveyNotFoundError(Exception):
     """Raised when an orchard has no surveys to analyse."""
 
@@ -20,7 +21,9 @@ class SurveyNotFoundError(Exception):
 class Service:
     """Orchestrates fetching survey data and running missing-tree detection."""
 
-    def __init__(self, aerobotics: Aerobotics, detector: Detector, cache: MissingTreesCache | None = None):
+    def __init__(
+        self, aerobotics: Aerobotics, detector: Detector, cache: MissingTreesCache | None = None
+    ):
         self._aerobotics = aerobotics
         self._detector = detector
         self._cache = cache if cache is not None else MissingTreesCache()
@@ -56,20 +59,19 @@ class Service:
             return MissingTreesResponse(missing_trees=[])
 
         # all trees in one orchard fall in the same UTM zone, so derive it
-        _, _, zone_number, zone_letter = utm.from_latlon(
-            positions[0].lat, positions[0].lng
-        )
+        _, _, zone_number, zone_letter = utm.from_latlon(positions[0].lat, positions[0].lng)
 
         # detect
-        raw_missing = self._detector.detect_missing_trees(
-            positions, zone_number, zone_letter
-        )
+        raw_missing = self._detector.detect_missing_trees(positions, zone_number, zone_letter)
 
         # construct response
-        missing_trees = [
-            MissingTree(lat=m["lat"], lng=m["lng"]) for m in raw_missing
-        ]
-        logger.info("{} missing trees detected for orchard {} survey {}", len(missing_trees), orchard_id, survey.id)
+        missing_trees = [MissingTree(lat=m["lat"], lng=m["lng"]) for m in raw_missing]
+        logger.info(
+            "{} missing trees detected for orchard {} survey {}",
+            len(missing_trees),
+            orchard_id,
+            survey.id,
+        )
 
         self._cache.set(survey.id, orchard_id, missing_trees)
         return MissingTreesResponse(missing_trees=missing_trees)
