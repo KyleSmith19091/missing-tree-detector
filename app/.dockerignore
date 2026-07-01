@@ -1,0 +1,23 @@
+# Virtualenvs / caches
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# VCS / editor
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Notebooks & local analysis (not needed to run the API)
+notebooks/
+
+# Local env / secrets
+.env
+*.env
+
+# OS cruft
+.DS_Store
