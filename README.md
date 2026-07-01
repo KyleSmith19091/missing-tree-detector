@@ -23,6 +23,7 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 - [6. Running Locally](#6-running-locally)
 - [7. CI/CD](#7-cicd)
   - [7.1 Tests](#71-tests)
+  - [7.1 Linting](#72-linting)
 - [8. Where I used AI](#8-where-i-used-ai)
 - [9. Journal](#9-journal)
 
@@ -121,7 +122,9 @@ The architecture is pretty simple, the key component is the orchards service. Th
 
 ### 4.2 System Design Considerations
 
-The missing tree detection algorithm does have a noticeable latency, so to mitigate this we add an in-process cache to mitigate this issue. The amount of memory required to store the list of missing trees for an orchard is generally pretty small so this should be fine for now. In a production setting this cache might rather be something like a Redis instance, this would allow us to have multiple instances of the API that can share this caching layer.
+The missing tree detection algorithm does have a noticeable latency, so to mitigate this we add an in-process cache to mitigate this issue. The amount of memory required to store the list of missing trees for an orchard is generally pretty small so this should be fine for now. If this needs to scale, a Redis instance can be used, this would allow us to have multiple instances of the API that can share this caching layer. 
+
+The missing tree detection algorithm is CPU heavy so handling a lot of requests would require a few vertically scaled machines. Limiting request concurrency and having a shared caching layer will help to mitigate the issue.
 
 The latency for detecting missing trees is acceptable for moderate orchards, if we need to handle larger orchards we need to add a job system. This way the client would instead receive a Job ID when asking if trees are missing in an orchard. The original client request would then be processed in an asynchronous fashion. This is so that the client is not waiting for the response and can continue with other work while waiting for its request to be processed.
 
@@ -153,6 +156,8 @@ The latency for detecting missing trees is acceptable for moderate orchards, if 
 
 ## 6. Running Locally 
 
+This project uses `uv` as the package manager. Install [here](https://docs.astral.sh/uv/getting-started/installation/).
+
 ```bash
 cd app/
 uv sync
@@ -163,11 +168,20 @@ uv run uvicorn api.main:app --reload
 
 The API is as Fly.io machine on [fly.io](https://fly.io/). A fly.io machine is an AWS firecracker microVM. Fly.IO was chosen since it has a secret manager, supports scaling down instances that are not used, easy scaling if needed, SSL certificate management and can deploy using a single command.
 
-A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API.
+A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API. A deployment is only made if the tests and linting checks pass. We also only execute the pipeline when files inside the app directory are changed.
 
 ### 7.1 Tests
 
-Unit-tests can be run
+```bash 
+cd app/
+uv run pytest
+```
+### 7.2 Linting
+
+```bash
+cd app/
+uv run ruff check
+```
 
 ## 8. Where I used AI
 
@@ -178,6 +192,8 @@ I declare that I used an AI coding to aid in certain aspects of this project.
 3. I used AI to assist with what functions to use in NumPy.
 4. I used AI to generate the visualisations in the notebooks/notebook.ipynb.
 5. I used AI to generate the fly.toml file.
+6. I used AI to help me generate the methods to generate synthetic data to test algorithm.
+7. I used AI to research a suitable linting and testing setup.
 
 ## 9. Journal
 
