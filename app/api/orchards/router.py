@@ -19,6 +19,7 @@ def build_service() -> Service:
     across requests. Override this dependency in tests to inject fakes.
 
     Safe to cache since there is no state in the Aerobotics client or detector
+    (missing tree cache is thread-safe)
     """
     return Service(
         aerobotics=AeroboticsClient(),

@@ -34,11 +34,9 @@ line-length = 100
 extend-exclude = [".venv", "__pycache__"]
 
 [tool.ruff.lint]
-# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear, UP: pyupgrade
 select = ["E", "W", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI's Depends/Query/etc. are designed to be called in argument defaults.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
 
 [tool.ruff.format]

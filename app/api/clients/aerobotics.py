@@ -88,3 +88,28 @@ class Survey:
             orchard_id=data["orchard_id"],
             date=data["date"],
         )
+
+class UpstreamAuthError(Exception):
+    """Raised when the Aerobotics API rejects our credentials (HTTP 401).
+
+    This signals a server-side configuration problem (missing/expired token),
+    not a client mistake. It must be surfaced to our callers as a generic 500
+    without leaking the upstream 401 or its details.
+    """
+
+    def __init__(self):
+        super().__init__("aerobotics API authentication failed")
+
+class SurveyNotFoundError(Exception):
+    """Raised when an orchard has no surveys to analyse."""
+
+    def __init__(self, orchard_id: int):
+        self.orchard_id = orchard_id
+        super().__init__(f"no surveys found for orchard {orchard_id}")
+
+class TreeSurveysNotFoundError(Exception):
+    """Raised when no tree surveys for a given survey are found"""
+
+    def __init__(self, survey_id: int):
+        self.survey_id = survey_id
+        super().__init__(f"no tree surveys found for survey {survey_id}")

@@ -5,8 +5,12 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from api.clients.aerobotics import (
+    SurveyNotFoundError,
+    TreeSurveysNotFoundError,
+    UpstreamAuthError,
+)
 from api.orchards.router import router as trees_router
-from api.orchards.service import SurveyNotFoundError
 
 # construct app
 app = FastAPI(title="api", version="0.1.0")
@@ -19,10 +23,21 @@ def _error(status_code: int, message: str) -> JSONResponse:
     """Uniform error envelope: always ``{"error": "<message>"}``."""
     return JSONResponse(status_code=status_code, content={"error": message})
 
-
 @app.exception_handler(SurveyNotFoundError)
 async def handle_survey_not_found(request: Request, exc: SurveyNotFoundError):
     return _error(404, str(exc))
+
+@app.exception_handler(TreeSurveysNotFoundError)
+async def handle_tree_survey_not_found(request: Request, exc: TreeSurveysNotFoundError):
+    return _error(404, str(exc))
+
+@app.exception_handler(UpstreamAuthError)
+async def handle_upstream_auth_error(request: Request, exc: UpstreamAuthError):
+    # Upstream rejected our credentials. This is a server-side config problem,
+    # not the caller's fault, so return a generic 500 and do NOT leak the 401
+    # or any upstream detail. Full detail is logged server-side.
+    logger.error("Aerobotics authentication failed: {}", exc)
+    return _error(500, "internal server error")
 
 
 @app.exception_handler(httpx.HTTPStatusError)
