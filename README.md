@@ -76,13 +76,15 @@ point is perpendicular to the y-axis we can more easily reason about them. Since
 
 ![Same-Y-Rotated](/diagrams/sameyrotated.png)
 
-To achieve this we need to reach for some linear algebra. We first need to determine the orientation of the rows (look at code to understand how this is done). We can then find the direction that is perpendicular to that direction and then project the points onto it. This is done by taking the dot product of the tree coordinates and multiplying with the vector $\langle -sin(\theta), cos(\theta) \rangle$ where $\theta$ is the dominant orientation of the rows. 
+To achieve this we need to reach for some linear algebra. We first need to determine the orientation of the rows (look at code to understand how this is done). We can then find the direction that is perpendicular to that direction and then project the points onto it. This is done by taking the dot product of the tree coordinates and multiplying with the vector $\langle -sin(\theta), cos(\theta) \rangle$ (vector representing direction perpendicular to row orientation) where $\theta$ is the dominant orientation of the rows. 
 
-The dot product tells us how far along the one vector lies on the other. We want to know how far along a tree's position lies along the perpendicular vector. Trees that have are next to each other in a row should have the same dot product value, since they should project to the same point on the perpendicular vector.
+The dot product tells us how far along the one vector lies on the other. We want to know how far along a tree's position lies along the perpendicular vector. Trees that are next to each other in a row should have the same dot product value, since they should project to the same point on the perpendicular vector.
 
-We can then group the points that have similar projection(dot product result) values as rows. There are some extra steps needed to achieve this, that are outlined in notebooks/notebook.ipynb.
+![Dot-product](/diagrams/dotproduct.png)
 
-With the mean we are able to identify gaps within the row, by walking across the row and calculating the difference between the trees in a pairwise fashion. We detect the number trees that are missing by dividing the distance by the average tree spacing distance. To determine the positions of the missing trees we need a method to estimate this. Linear interpolation makes sense here, since it is a simple method that can be used to evenly space elements in a line. The trees are assumed to be evenly spaced and in a line.
+We can then group the points that have similar projection values as rows(see above). There are some extra steps needed to achieve this, the projections are not as perfect as above, that are outlined in `notebooks/notebook.ipynb` and in the actual implementation `app/api/orchards/missing_tree_detector/detector_impl.py:40`.
+
+Once we know the rows we can search for missing trees within a row. This is done simply by first calculating the spacing between the tree positions. We use the average spacing as the heuristic to determine if and how many trees are missing between two detected trees in a row.
 
 ### 3.2 Phase 2
 
@@ -98,7 +100,9 @@ We can also check if trees are missing at the start of the row, this follows a s
 
 ### Algorithmic Complexity notes
 
-The most expensive operation in the algorithm is building the KDTree to determine the row's neighbours. This efficiently encodes points according to their spatial information and will scale well for large orchards, but is the most expensive operation in terms of theoretical complexity: $O(n log n)$. Calculating the projections and histograms (*with known bins) are $O(n)$. The autocorrelation calculation is $O(k^2)$ where $k$ is the number of bins, which equates to roughly the number of rows. This could become a bottleneck for very large orchards, but this would require orchards with 10,000s of rows.
+The most expensive operation in the algorithm is building the KDTree to determine the row's neighbours. This efficiently encodes points according to their spatial information and will scale well for large orchards, but is the most expensive operation in terms of theoretical complexity: $O(n log n)$, where $n$ is the number of detected trees. Calculating the projections and histograms (*with known bins) are $O(n)$, but are generally implemented very efficiently. The autocorrelation calculation is $O(k^2)$ where $k$ is the number of bins, which equates to roughly the number of rows. This could become a bottleneck for very large orchards, but this would require orchards with 10,000s of rows.
+
+However there are some practical slow downs that are not captured by the algorithmic complexity that are discussed in [4.2 System Design Considerations](#42-system-design-considerations). 
 
 ### Assumptions and Shortcomings
 
@@ -111,6 +115,11 @@ The last row would be misclassified as three different rows.
 2. The algorithm assumes that the trees were planted at the same time and thus also have a similar size. This is critical for estimating the spacing.
 
 3. The second phase won't work if three rows are missing trees in the same positions, since it can't establish a pattern then.
+
+4. When determining rows using row spacing we use a configurable threshold parameter to identify the gaps from the projection.
+
+5. If the orchard is close to a perfect square then this will also not work, since one of the core assumptions of the algorithm is that we can reason discern
+spacing across and along rows. 
 
 ## 4. Architecture 
 
@@ -194,6 +203,7 @@ I declare that I used an AI coding to aid in certain aspects of this project.
 5. I used AI to generate the fly.toml file.
 6. I used AI to help me generate the methods to generate synthetic data to test algorithm.
 7. I used AI to research a suitable linting and testing setup.
+8. I used AI to help with understanding some of the linear algebra and trigonometry calculations.
 
 ## 9. Journal
 
@@ -218,4 +228,8 @@ I declare that I used an AI coding to aid in certain aspects of this project.
 - Added code for setting up HTTP server and added missing trees route.
 - Added unit tests for the tree detection algorithm
 - Added Dockerfile and additional configuration to deploy API 
+- Deployed API
 - Added Github Workflow to deploy app when pushing to main
+
+**Session 4**
+- Reviewed Algorithm and thought of assumptions and edge cases
