@@ -36,6 +36,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    # Only run on pushes AND when a Python file under app/ changed.
+    if: github.event_name == 'push' && needs.changes.outputs.python == 'true'
     # The app (pyproject.toml, tests/) lives in the app/ subdirectory.
     defaults:
       run:
@@ -61,6 +63,8 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    # Only run on pushes AND when a Python file under app/ changed.
+    if: github.event_name == 'push' && needs.changes.outputs.python == 'true'
     # The app (pyproject.toml, tests/) lives in the app/ subdirectory.
     defaults:
       run:
