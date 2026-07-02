@@ -83,7 +83,7 @@ def detector() -> DetectorImpl:
 
 
 def test_returns_list_of_latlng_dicts(detector: DetectorImpl):
-    missing = detector.detect_missing_trees(_grid(6, 6, drop=[(2, 3)]), ZONE_NUMBER, ZONE_LETTER)
+    missing = detector.detect_missing_trees(_grid(6, 6, drop=[(2, 3)]))
     assert isinstance(missing, list)
     for m in missing:
         assert set(m) == {"lat", "lng"}
@@ -92,12 +92,12 @@ def test_returns_list_of_latlng_dicts(detector: DetectorImpl):
 
 
 def test_perfect_grid_has_no_missing(detector: DetectorImpl):
-    missing = detector.detect_missing_trees(_grid(7, 7), ZONE_NUMBER, ZONE_LETTER)
+    missing = detector.detect_missing_trees(_grid(7, 7))
     assert missing == []
 
 
 def test_single_interior_gap_detected(detector: DetectorImpl):
-    missing = detector.detect_missing_trees(_grid(7, 7, drop=[(3, 3)]), ZONE_NUMBER, ZONE_LETTER)
+    missing = detector.detect_missing_trees(_grid(7, 7, drop=[(3, 3)]))
     assert len(missing) == 1
     assert _nearest_dist(missing, _cell_utm(3, 3)) < 0.5
 
@@ -107,7 +107,7 @@ def test_consecutive_interior_gap_detects_two_trees(detector: DetectorImpl):
     # Regression test: with a mean-based spacing estimate the inflated mean
     # under-counts this to 1; the median-based estimate recovers both.
     missing = detector.detect_missing_trees(
-        _grid(7, 8, drop=[(3, 3), (3, 4)]), ZONE_NUMBER, ZONE_LETTER
+        _grid(7, 8, drop=[(3, 3), (3, 4)])
     )
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(3, 3)) < 0.5
@@ -116,7 +116,7 @@ def test_consecutive_interior_gap_detects_two_trees(detector: DetectorImpl):
 
 def test_multiple_rows_with_interior_gaps(detector: DetectorImpl):
     missing = detector.detect_missing_trees(
-        _grid(8, 8, drop=[(2, 4), (5, 2)]), ZONE_NUMBER, ZONE_LETTER
+        _grid(8, 8, drop=[(2, 4), (5, 2)])
     )
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(2, 4)) < 0.5
@@ -127,7 +127,7 @@ def test_two_separate_gaps_in_short_row(detector: DetectorImpl):
     # Two single gaps in one short row: the inflated mean would report 0,
     # the median recovers both.
     missing = detector.detect_missing_trees(
-        _grid(7, 8, drop=[(3, 2), (3, 5)]), ZONE_NUMBER, ZONE_LETTER
+        _grid(7, 8, drop=[(3, 2), (3, 5)])
     )
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(3, 2)) < 0.5
@@ -138,7 +138,7 @@ def test_end_of_row_gap_detected(detector: DetectorImpl):
     # Middle row (r=3) is missing its last two trees; neighbouring rows are
     # full and equal length, so the deficit is attributed to the row's end.
     missing = detector.detect_missing_trees(
-        _grid(7, 8, drop=[(3, 6), (3, 7)]), ZONE_NUMBER, ZONE_LETTER
+        _grid(7, 8, drop=[(3, 6), (3, 7)])
     )
     assert len(missing) == 2
     assert _nearest_dist(missing, _cell_utm(3, 6)) < 0.5
@@ -149,8 +149,6 @@ def test_end_of_row_gap_detected(detector: DetectorImpl):
 def test_interior_gap_detected_on_rotated_orchard(detector: DetectorImpl, rotation_deg: float):
     missing = detector.detect_missing_trees(
         _grid(7, 7, drop=[(3, 3)], rotation_deg=rotation_deg),
-        ZONE_NUMBER,
-        ZONE_LETTER,
     )
     assert len(missing) == 1
     assert _nearest_dist(missing, _cell_utm(3, 3, rotation_deg)) < 0.5
@@ -159,7 +157,7 @@ def test_interior_gap_detected_on_rotated_orchard(detector: DetectorImpl, rotati
 def test_rows_with_fewer_than_three_trees_are_ignored(detector: DetectorImpl):
     # A 2-column grid: every row has only 2 trees, below the minimum needed
     # to establish an in-row pattern, so nothing is reported (and no crash).
-    missing = detector.detect_missing_trees(_grid(6, 2), ZONE_NUMBER, ZONE_LETTER)
+    missing = detector.detect_missing_trees(_grid(6, 2))
     assert missing == []
 
 

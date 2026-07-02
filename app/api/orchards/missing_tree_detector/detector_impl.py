@@ -14,7 +14,7 @@ class DetectorImpl(Detector):
         self.row_spacing_threshold_multiplier = row_spacing_threshold_multiplier
 
     def detect_missing_trees(
-        self, tree_positions: list[TreePosition], utm_zone_number: int, utm_zone_letter: str
+        self, tree_positions: list[TreePosition],
     ) -> list[dict]:
         """
         detect_missing_trees implements a novel algorithm for trying
@@ -22,6 +22,12 @@ class DetectorImpl(Detector):
         within an orchard
 
         """
+
+        # get UTM zone
+        _, _, utm_zone_number, utm_zone_letter = utm.from_latlon(
+            tree_positions[0].lat,
+            tree_positions[0].lng
+        )
 
         # convert tree positions to UTM coordinates
         tree_positions_utm = np.array(
@@ -197,9 +203,7 @@ class DetectorImpl(Detector):
         kdtree = KDTree(tree_positions)
 
         # select K nearby tree positions for each
-        # tree position in the tree. Four is chosen
-        # since the idea is that the trees are in a pretty uniform grid
-        # so the closest trees should be above, below, left and right
+        # tree position in the tree.
         K = 4
         _, indices = kdtree.query(tree_positions, k=K + 1)
 
@@ -222,9 +226,9 @@ class DetectorImpl(Detector):
         along = np.array([math.cos(row_angle), math.sin(row_angle)])
 
         # determine the direction perpendicular to row orientation
-        up = np.array([-math.sin(row_angle), math.cos(row_angle)])
+        perpendicular = np.array([-math.sin(row_angle), math.cos(row_angle)])
 
-        return (up, along)
+        return (perpendicular, along)
 
     def _estimate_row_spacing(
         self, tree_positions: np.ndarray, projections_perpendicular: np.ndarray

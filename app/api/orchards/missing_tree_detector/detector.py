@@ -9,8 +9,6 @@ class Detector(ABC):
     def detect_missing_trees(
         self,
         tree_positions: list["TreePosition"],
-        utm_zone_number: int,
-        utm_zone_letter: str,
     ) -> list[dict]:
         """Estimate positions of missing trees.
 
