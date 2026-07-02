@@ -4,6 +4,8 @@
 curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 ```
 
+**Note**: The system scales to 0 instances, so there is a possible cold-start latency that needs to considered.
+
 ## Outline
 
 - [1. Requirements](#1-requirements)
@@ -14,8 +16,8 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 - [3. Missing Tree Calculation Algorithm](#3-missing-tree-calculation-algorithm)
   - [3.1 Phase 1](#31-phase-1)
   - [3.2 Phase 2](#32-phase-2)
-  - [Algorithmic Complexity notes](#algorithmic-complexity-notes)
-  - [Assumptions and Shortcomings](#assumptions-and-shortcomings)
+  - [3.3 Algorithmic Complexity notes](#33-algorithmic-complexity-notes)
+  - [3.4 Assumptions and Shortcomings](#34-assumptions-and-shortcomings)
 - [4. Architecture](#4-architecture)
   - [4.1 Diagram](#41-diagram)
   - [4.2 System Design Considerations](#42-system-design-considerations)
@@ -33,14 +35,10 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 1. A client must be able to get a list of the coordinates of missing trees given an Orchard ID. (F1)
 
 ### Non-functional Requirements (N)
-1. The system should not overload the Aerobotics API with duplicate requests. (N1)
-2. The system should determine the missing trees within a reasonable amount of time. (N2)
+2. The system should determine the missing trees within a reasonable amount of time. (N1)
 
 ## 2. API Design
-1. The API should ensure that the missing trees endpoint should be paginated.
-2. The API should ensure that the page size should be configurable.
-3. The API should ensure that it uses offset based pagination to copy approach used by Aerobotics API.
-4. The API should always respond in JSON format. 
+1. The API should always respond in JSON format. 
 
 ### Endpoints
 | Endpoint        | HTTP Method | Request  | Query Parameters | Response |
@@ -49,12 +47,11 @@ curl https://aerobotics-api.fly.dev/orchards/216269/missing-trees
 
 ## 3. Missing Tree Calculation Algorithm
 To determine if a tree is missing we need to estimate the planting pattern.
-At this point in time I don't have access to multiple surveys
-of the same area so I can't diff the tree locations. Looking at the aerial image our brain is able to discern if a tree is missing by identifying anomalies in the planting patterns. An anomaly can be identified as an unexpected gap between trees. 
+Looking at the aerial image our brain is able to discern if a tree is missing by identifying anomalies in the planting patterns. An anomaly can be identified as an unexpected gap between trees. 
 
 We need to solely rely on the tree locations and their metadata. There are two types of cases we need to handle:
-1. Tree(s) within a row are missing.
-2. First or last tree(s) within a row are missing.
+1. Tree(s) within a row are missing: pattern break when there is a larger than expected gap between two trees.
+2. First or last tree(s) within a row are missing: pattern break when row end or start is no longer uniform.
 
 The strategies for handling each is different so we divide our algorithm into two phases:
 1. Find missing tree(s) using inter-row tree spacing as a heuristic.
@@ -71,8 +68,8 @@ However the trees might not be oriented in this way, so we need to consider some
 ![Same-Y-Angled](/diagrams/sameyangle.png)
 
 Here we see that is a bit more complicated to reason about if a 
-tree is in the same row as another. Since we know that if the 
-point is perpendicular to the y-axis we can more easily reason about them. Since we only care about the y-axis. Well if we know the angle of the rows, we can rotate our x and y-axis so that this is true again:
+tree is in the same row as another, since their y-coordinates are not the same even though they are aligned on a different axis. Since we know that if the 
+tree is perpendicular to the y-axis we can more easily reason about them. Since we only care about the y-axis for reasoning about if trees are in a row. Well if we know the angle of the rows, we can rotate our x and y-axis so that the y-coordinates are the same again:
 
 ![Same-Y-Rotated](/diagrams/sameyrotated.png)
 
@@ -82,9 +79,9 @@ The dot product tells us how far along the one vector lies on the other. We want
 
 ![Dot-product](/diagrams/dotproduct.png)
 
-We can then group the points that have similar projection values as rows(see above). There are some extra steps needed to achieve this, the projections are not as perfect as above, that are outlined in `notebooks/notebook.ipynb` and in the actual implementation `app/api/orchards/missing_tree_detector/detector_impl.py:40`.
+We can then group the points that have similar projection values as rows(see above). There are some extra steps needed to achieve this, the projections are not as perfect as above, that are outlined in `notebooks/notebook.ipynb` and in the actual implementation `app/api/orchards/missing_tree_detector/detector_impl.py:40`. However if we know the spacings we can group the tree positions by their projections and using the average row spacing determine where a row breaks into a new one.
 
-Once we know the rows we can search for missing trees within a row. This is done simply by first calculating the spacing between the tree positions. We use the average spacing as the heuristic to determine if and how many trees are missing between two detected trees in a row.
+Once we know the rows we can search for missing trees within a row. This is done by first calculating the spacing between the tree positions in a row. We use the average spacing as the heuristic to determine if and how many trees are missing between two detected trees in a row. The number of trees is just the distance between the two trees divided by average spacing. We can then interpolate the position(s) of the missing tree(s), this gives us an estimate for where the missing tree(s) should be.
 
 ### 3.2 Phase 2
 
@@ -94,17 +91,19 @@ we compare three rows at once. The motivation being that **three forms a pattern
 ![Sliding Window](/diagrams/slidingwindow.png)
 
 Using the above example orchard, we can infer that a tree is missing at the end of the row by comparing the position of the last tree in every row in the window. Additionally if the number of trees (missing trees in row are counted) in the top and
-bottom rows are the same, only then do we check the middle row. If the position's of the top and bottom rows are the same and have the same number of trees then the middle one should also be the same. We can confirm this by using an approach similar to Phase 1. Instead of projecting to the vector perpendicular to the row orientation, project onto the row orientation. The idea being that the last tree in the row should project to a similar point on the row direction vector. We then calculate the distance between the middle row's projection and either the top or bottom row's projection value. We then check how many trees can fit into that distance. 
+bottom rows are the same, only then do we check the middle row. If the position of the top and bottom row trees are the same and the rows have the same number of trees then the middle one should also be the same. We can confirm this by using an approach similar to Phase 1. Instead of projecting to the vector perpendicular to the row orientation, project onto the row orientation. 
+
+![Along Row Projection](/diagrams/alongrowprojection.png)
+
+The idea being that the last tree in the row should project to a similar point on the row direction vector. We then calculate the distance between the middle row's projection and either the top or bottom row's projection value. We then check how many trees can fit into that distance. 
 
 We can also check if trees are missing at the start of the row, this follows a similar approach to above.
 
-### Algorithmic Complexity notes
+### 3.3 Algorithmic Complexity notes
 
-The most expensive operation in the algorithm is building the KDTree to determine the row's neighbours. This efficiently encodes points according to their spatial information and will scale well for large orchards, but is the most expensive operation in terms of theoretical complexity: $O(n log n)$, where $n$ is the number of detected trees. Calculating the projections and histograms (*with known bins) are $O(n)$, but are generally implemented very efficiently. The autocorrelation calculation is $O(k^2)$ where $k$ is the number of bins, which equates to roughly the number of rows. This could become a bottleneck for very large orchards, but this would require orchards with 10,000s of rows.
+The most expensive operation in the algorithm is building the KDTree to determine the row's neighbours. This efficiently encodes points according to their spatial information and will scale well for large orchards, but is the most expensive operation in terms of theoretical complexity: $O(n log n)$, where $n$ is the number of detected trees. Calculating the projections and histograms (*with known bins) are $O(n)$, and are generally implemented very efficiently as well. The autocorrelation calculation is $O(k^2)$ where $k$ is the number of bins, which equates to roughly the number of rows. This could become a bottleneck for very large orchards, but this would require orchards with 10,000s of rows.
 
-However there are some practical slow downs that are not captured by the algorithmic complexity that are discussed in [4.2 System Design Considerations](#42-system-design-considerations). 
-
-### Assumptions and Shortcomings
+### 3.4 Assumptions and Shortcomings
 
 1. The algorithm assumes that the orchard has a single domninant orientation of trees. For example something like this won't work:
 
@@ -119,7 +118,7 @@ The last row would be misclassified as three different rows.
 4. When determining rows using row spacing we use a configurable threshold parameter to identify the gaps from the projection.
 
 5. If the orchard is close to a perfect square then this will also not work, since one of the core assumptions of the algorithm is that we can reason discern
-spacing across and along rows. 
+spacing across and along rows. This should be pretty unlikely since typically there are paths between the rows. 
 
 ## 4. Architecture 
 
@@ -131,7 +130,7 @@ The architecture is pretty simple, the key component is the orchards service. Th
 
 ### 4.2 System Design Considerations
 
-The missing tree detection algorithm does have a noticeable latency, so to mitigate this we add an in-process cache to mitigate this issue. The amount of memory required to store the list of missing trees for an orchard is generally pretty small so this should be fine for now. If this needs to scale, a Redis instance can be used, this would allow us to have multiple instances of the API that can share this caching layer. 
+The missing tree detection algorithm does have a noticeable latency, so to mitigate this we add an in-process cache. This obviously does not solve the latency issue when the algorithm is called the first time. The amount of memory required to store the list of missing trees for an orchard is generally pretty small so this should be fine for now. We also evict stale entries when a new tree survey is found. If this needs to scale, a Redis instance can be used, this would allow us to have multiple instances of the API that can share this caching layer. 
 
 The missing tree detection algorithm is CPU heavy so handling a lot of requests would require a few vertically scaled machines. Limiting request concurrency and having a shared caching layer will help to mitigate the issue.
 
@@ -154,7 +153,7 @@ The latency for detecting missing trees is acceptable for moderate orchards, if 
 │   │       ├── router.py - Endpoints
 │   │       ├── service.py - Logic
 │   │       └── missing_tree_detector/
-│   │           └── missing_tree_detector_impl.py
+│   │           └── detector_impl.py
 │   ├── tests/ Unit-tests
 │   └── Dockerfile
 ├── notebooks/
@@ -175,9 +174,9 @@ uv run uvicorn api.main:app --reload
 
 ## 7. CI/CD
 
-The API is as Fly.io machine on [fly.io](https://fly.io/). A fly.io machine is an AWS firecracker microVM. Fly.IO was chosen since it has a secret manager, supports scaling down instances that are not used, easy scaling if needed, SSL certificate management and can deploy using a single command.
+The API is as Fly.io machine on [fly.io](https://fly.io/). A fly.io machine is an AWS firecracker microVM. Fly.IO was chosen since it has a secret manager, supports scaling down instances that are not used, easy scaling if needed, provisions URL and can deploy using a single command.
 
-A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API. A deployment is only made if the tests and linting checks pass. We also only execute the pipeline when files inside the app directory are changed.
+A github workflow was also setup so that pushes to the main branch automatically deploy a new version of the API. A deployment is only made if the tests and linting checks pass. The workflow is executed depending on the files changed. We perform linting and testing checks if any Python files changed and deploy if dependencies or Python files change (assuming linting and testing) checks pass.
 
 ### 7.1 Tests
 
@@ -226,10 +225,12 @@ I declare that I used an AI coding to aid in certain aspects of this project.
 **Session 3**
 - Rewrote algorithm from notebook for API implementation.
 - Added code for setting up HTTP server and added missing trees route.
-- Added unit tests for the tree detection algorithm
-- Added Dockerfile and additional configuration to deploy API 
-- Deployed API
-- Added Github Workflow to deploy app when pushing to main
+- Added unit tests for the tree detection algorithm.
+- Added Dockerfile and additional configuration to deploy API.
+- Deployed API.
+- Added Github Workflow to deploy app when pushing to main.
 
 **Session 4**
-- Reviewed Algorithm and thought of assumptions and edge cases
+- Reviewed algorithm and thought of assumptions and edge cases.
+- Reviewed API code and overall repository.
+- Refactored some API code.
